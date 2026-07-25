@@ -17,7 +17,7 @@
     normalLayers: [
       { name: "pad", folder: "pad", prefix: "pad", count: 4, volume: 0.28 },
       { name: "noise", folder: "noise", prefix: "noise", count: 4, volume: 0.19 },
-      { name: "bass",   folder: "bass",   prefix: "bass",   count: 4, volume: 0.24 },
+      { name: "bass",   folder: "bass",   prefix: "bass",   count: 4, volume: 0.54 },
       { name: "melody", folder: "melody", prefix: "melody", count: 4, volume: 0.23 },
       { name: "misc", folder: "misc", prefix: "misc", count: 4, volume: 0.18 }
     ],
