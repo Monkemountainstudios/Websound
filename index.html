@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monke Mountain Atmosphere</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="atmosphere-panel" aria-label="Monke Mountain Atmosphere controls">
+    <div class="panel-heading">
+      <span>Atmosphere</span>
+      <span id="statusLed" class="status-led" aria-hidden="true"></span>
+    </div>
+
+    <div class="button-row" role="group" aria-label="Atmosphere">
+      <button id="onButton" class="control-button" type="button" aria-pressed="false">ON</button>
+      <button id="offButton" class="control-button active" type="button" aria-pressed="true">OFF</button>
+    </div>
+
+    <div class="control-label">Evolution</div>
+
+    <div class="button-row evolution-row" role="group" aria-label="Evolution">
+      <button id="sporadicButton" class="control-button active" type="button" aria-pressed="true">SPORADIC</button>
+      <button id="frequentButton" class="control-button" type="button" aria-pressed="false">FREQUENT</button>
+    </div>
+  </main>
+
+  <script src="generator.js"></script>
+</body>
+</html>
