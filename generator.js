@@ -5,14 +5,14 @@
     fade: {
       masterIn: 8,
       masterOut: 8,
-      sporadicCrossfade: 10,
+      sporadicCrossfade: 12,
       frequentCrossfade: 7,
       drumIn: 7,
       drumOut: 9
     },
 
     evolution: {
-      sporadic: { min: 20, max: 50 },
+      sporadic: { min: 20, max: 55 },
       frequent: { min: 10, max: 35 }
     },
 
@@ -21,35 +21,35 @@
         name: "pad",
         folder: "pad",
         prefix: "pad",
-        count: 4,
+        count: 5,
         volume: 0.28
       },
       {
         name: "noise",
         folder: "noise",
         prefix: "noise",
-        count: 4,
+        count: 5,
         volume: 0.19
       },
       {
         name: "bass",
         folder: "bass",
         prefix: "bass",
-        count: 4,
+        count: 6,
         volume: 0.24
       },
       {
         name: "melody",
         folder: "melody",
         prefix: "melody",
-        count: 4,
+        count: 6,
         volume: 0.23
       },
       {
         name: "misc",
         folder: "misc",
         prefix: "misc",
-        count: 4,
+        count: 8,
         volume: 0.18
       }
     ],
@@ -58,7 +58,7 @@
       name: "drums",
       folder: "drums",
       prefix: "drum",
-      count: 4,
+      count: 5,
       volume: 0.17,
 
       chance: {
