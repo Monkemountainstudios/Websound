@@ -21,35 +21,35 @@
         name: "pad",
         folder: "pad",
         prefix: "pad",
-        count: 5,
+        count: 9,
         volume: 0.28
       },
       {
         name: "noise",
         folder: "noise",
         prefix: "noise",
-        count: 5,
+        count: 8,
         volume: 0.19
       },
       {
         name: "bass",
         folder: "bass",
         prefix: "bass",
-        count: 6,
+        count: 7,
         volume: 0.18
       },
       {
         name: "melody",
         folder: "melody",
         prefix: "melody",
-        count: 6,
+        count: 12,
         volume: 0.23
       },
       {
         name: "misc",
         folder: "misc",
         prefix: "misc",
-        count: 8,
+        count: 10,
         volume: 0.18
       }
     ],
