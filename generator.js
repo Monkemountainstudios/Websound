@@ -3,10 +3,10 @@
 
   const CONFIG = {
     fade: {
-      masterIn: 8,
-      masterOut: 8,
+      masterIn: 10,
+      masterOut: 10,
       sporadicCrossfade: 12,
-      frequentCrossfade: 7,
+      frequentCrossfade: 9,
       drumIn: 7,
       drumOut: 9
     },
@@ -36,7 +36,7 @@
         folder: "bass",
         prefix: "bass",
         count: 6,
-        volume: 0.24
+        volume: 0.18
       },
       {
         name: "melody",
