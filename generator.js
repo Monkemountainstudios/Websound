@@ -254,7 +254,7 @@
     for (const url of fileCandidates(layer, index)) {
       try {
         const response = await fetch(url, {
-          cache: "no-store"
+          cache: "force-cache"
         });
 
         if (!response.ok) {
@@ -740,8 +740,8 @@
       setLed(null);
 
       alert(
-        "The atmosphere could not start:\n\n" +
-       
+        "The atmosphere could not start. " +
+        "Check the audio folders and filenames, then reload."
       );
 
       throw error;
