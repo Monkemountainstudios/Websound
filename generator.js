@@ -21,35 +21,35 @@
         name: "pad",
         folder: "pad",
         prefix: "pad",
-        count: 9,
+        count: 11,
         volume: 0.28
       },
       {
         name: "noise",
         folder: "noise",
         prefix: "noise",
-        count: 8,
+        count: 9,
         volume: 0.19
       },
       {
         name: "bass",
         folder: "bass",
         prefix: "bass",
-        count: 7,
+        count: 11,
         volume: 0.18
       },
       {
         name: "melody",
         folder: "melody",
         prefix: "melody",
-        count: 12,
+        count: 14,
         volume: 0.23
       },
       {
         name: "misc",
         folder: "misc",
         prefix: "misc",
-        count: 10,
+        count: 12,
         volume: 0.18
       }
     ],
@@ -58,7 +58,7 @@
       name: "drums",
       folder: "drums",
       prefix: "drum",
-      count: 5,
+      count: 7,
       volume: 0.17,
 
       chance: {
@@ -254,7 +254,7 @@
     for (const url of fileCandidates(layer, index)) {
       try {
         const response = await fetch(url, {
-          cache: "force-cache"
+          cache: "no-store"
         });
 
         if (!response.ok) {
@@ -740,8 +740,8 @@
       setLed(null);
 
       alert(
-        "The atmosphere could not start. " +
-        "Check the audio folders and filenames, then reload."
+        "The atmosphere could not start:\n\n" +
+       
       );
 
       throw error;
