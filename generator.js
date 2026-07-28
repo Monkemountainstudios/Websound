@@ -13,7 +13,7 @@
 
     evolution: {
       sporadic: { min: 20, max: 55 },
-      frequent: { min: 10, max: 35 }
+      frequent: { min: 7, max: 35 }
     },
 
     normalLayers: [
@@ -22,21 +22,21 @@
         folder: "pad",
         prefix: "pad",
         count: 11,
-        volume: 0.28
+        volume: 0.24
       },
       {
         name: "noise",
         folder: "noise",
         prefix: "noise",
-        count: 9,
-        volume: 0.19
+        count: 11,
+        volume: 0.17
       },
       {
         name: "bass",
         folder: "bass",
         prefix: "bass",
         count: 11,
-        volume: 0.18
+        volume: 0.17
       },
       {
         name: "melody",
@@ -49,7 +49,7 @@
         name: "misc",
         folder: "misc",
         prefix: "misc",
-        count: 12,
+        count: 14,
         volume: 0.18
       }
     ],
