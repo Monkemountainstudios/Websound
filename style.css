@@ -33,7 +33,7 @@ body { padding: 4px; }
     letter-spacing: 1px;
     text-transform: uppercase;
     text-align: center;
-    opacity: 0.6;
+    opacity: 0.8;
   }
 .control-label { margin: 13px 0 9px; }
 .status-led {
