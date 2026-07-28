@@ -26,6 +26,15 @@ body { padding: 4px; }
   justify-content: space-between;
   margin-bottom: 10px;
 }
+.copyright {
+    margin-top: 12px;
+    font-size: 9px;
+    color: #666;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-align: center;
+    opacity: 0.6;
+  }
 .control-label { margin: 13px 0 9px; }
 .status-led {
   width: 6px;
