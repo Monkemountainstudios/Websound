@@ -10,7 +10,7 @@ body { padding: 4px; }
 .atmosphere-panel {
   width: 100%;
   max-width: 230px;
-  padding: 12px 11px 13px;
+  padding: 12px 11px 8px;
   border: 1px solid #d7d7d7;
   background: #181818;
   font-size: 12px;
@@ -27,7 +27,7 @@ body { padding: 4px; }
   margin-bottom: 10px;
 }
 .copyright {
-    margin-top: 12px;
+    margin-top: 10px;
     font-size: 6px;
     color: #666;
     letter-spacing: 1px;
