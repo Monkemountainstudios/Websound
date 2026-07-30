@@ -1,4 +1,5 @@
 * { box-sizing: border-box; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -6,43 +7,80 @@ html, body {
   color: #f0f0f0;
   font-family: Arial, Helvetica, sans-serif;
 }
+
 body { padding: 4px; }
+
 .atmosphere-panel {
   width: 100%;
   max-width: 230px;
-  padding: 12px 11px 13px;
+  padding: 12px 11px 8px;
   border: 1px solid #d7d7d7;
   background: #181818;
   font-size: 12px;
   line-height: 1;
 }
-.panel-heading, .control-label {
+
+.panel-heading,
+.control-label {
   font-weight: 700;
   letter-spacing: 0.2px;
 }
+
 .panel-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
 }
+
 .control-label { margin: 13px 0 9px; }
+
 .status-led {
   width: 6px;
   height: 6px;
   flex: 0 0 6px;
-  border: 1px solid #777;
+  border: 1px solid #705a20;
   border-radius: 50%;
-  background: #282828;
-  transition: background 250ms ease, border-color 250ms ease;
+  background: #2c281d;
+  box-shadow: none;
+  transition:
+    background 250ms ease,
+    border-color 250ms ease,
+    box-shadow 250ms ease;
 }
-.status-led.on { border-color: #fff; background: #fff; }
-.status-led.loading { border-color: #aaa; background: #777; }
+
+.status-led.on {
+  border-color: #f0cf69;
+  background: #d6a92d;
+  box-shadow: 0 0 5px rgba(214, 169, 45, 0.72);
+}
+
+.status-led.loading {
+  border-color: #b89538;
+  background: #806f39;
+}
+
+.status-led.glacial {
+  animation: glacial-breathe 10s ease-in-out infinite;
+}
+
+@keyframes glacial-breathe {
+  0%, 100% {
+    opacity: 0.42;
+    box-shadow: 0 0 2px rgba(214, 169, 45, 0.25);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 8px rgba(214, 169, 45, 0.9);
+  }
+}
+
 .button-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
 .control-button {
   min-height: 27px;
   padding: 5px 7px;
@@ -56,14 +94,53 @@ body { padding: 4px; }
   cursor: pointer;
   transition: background 130ms ease, color 130ms ease;
 }
-.control-button:hover, .control-button:focus-visible {
+
+.control-button:hover,
+.control-button:focus-visible {
   border-color: #fff;
   outline: none;
 }
-.control-button.active { background: #f0f0f0; color: #111; }
-.control-button:disabled { cursor: wait; opacity: 0.55; }
+
+.control-button.active {
+  background: #f0f0f0;
+  color: #111;
+}
+
+.control-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.mode-help {
+  min-height: 28px;
+  margin-top: 9px;
+  color: #8d8d8d;
+  font-size: 8px;
+  line-height: 1.35;
+  letter-spacing: 0.25px;
+}
+
+.copyright {
+  margin-top: 10px;
+  color: #666;
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  opacity: 0.8;
+}
+
 @media (max-width: 190px) {
-  .atmosphere-panel { padding-left: 8px; padding-right: 8px; }
+  .atmosphere-panel {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
   .button-row { gap: 5px; }
-  .control-button { padding-left: 3px; padding-right: 3px; font-size: 9px; }
+
+  .control-button {
+    padding-left: 3px;
+    padding-right: 3px;
+    font-size: 9px;
+  }
 }
