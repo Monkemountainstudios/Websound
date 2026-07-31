@@ -109,6 +109,7 @@
   let masterGain = null;
   let dryGain = null;
   let convolver = null;
+  let wetHighpass = null;
   let wetGain = null;
   let compressor = null;
 
@@ -210,8 +211,13 @@
     dryGain.gain.value = 0.82;
 
     convolver = audioContext.createConvolver();
-    convolver.buffer = createSyntheticImpulse(audioContext, 4.8, 2.7);
-
+    convolver.buffer = createSyntheticImpulse(audioContext, 5.8, 2.2);
+    
+    wetHighpass = audioContext.createBiquadFilter();
+    wetHighpass.type = "highpass";
+    wetHighpass.frequency.value = 200;
+    wetHighpass.Q.value = 0.7;
+    
     wetGain = audioContext.createGain();
     wetGain.gain.value = 0.25;
 
@@ -224,6 +230,7 @@
 
     dryGain.connect(masterGain);
     convolver.connect(wetGain);
+    wetHighpass.connect(wetGain);
     wetGain.connect(masterGain);
     masterGain.connect(compressor);
     compressor.connect(audioContext.destination);
