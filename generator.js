@@ -26,12 +26,12 @@
 
     evolution: {
       normal: {
-        sporadic: { min: 20, max: 55 },
-        frequent: { min: 7, max: 35 }
+        sporadic: { min: 18, max: 49 },
+        frequent: { min: 7, max: 32 }
       },
       glacial: {
         sporadic: { min: 45, max: 100 },
-        frequent: { min: 25, max: 65 }
+        frequent: { min: 25, max: 55 }
       }
     },
 
@@ -55,8 +55,8 @@
       volume: 0.17,
       chance: { sporadic: 0.12, frequent: 0.20 },
       activeFor: {
-        sporadic: { min: 35, max: 80 },
-        frequent: { min: 30, max: 65 }
+        sporadic: { min: 25, max: 80 },
+        frequent: { min: 10, max: 65 }
       }
     },
 
