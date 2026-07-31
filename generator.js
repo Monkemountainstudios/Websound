@@ -39,10 +39,10 @@
 
     normalLayers: [
       { name: "pad", folder: "pad", prefix: "pad", count: 11, volume: 0.24 },
-      { name: "noise", folder: "noise", prefix: "noise", count: 11, volume: 0.17 },
+      { name: "noise", folder: "noise", prefix: "noise", count: 13, volume: 0.17 },
       { name: "bass", folder: "bass", prefix: "bass", count: 11, volume: 0.17 },
       { name: "melody", folder: "melody", prefix: "melody", count: 14, volume: 0.23 },
-      { name: "misc", folder: "misc", prefix: "misc", count: 14, volume: 0.18 }
+      { name: "misc", folder: "misc", prefix: "misc", count: 16, volume: 0.18 }
     ],
 
     drumLayer: {
