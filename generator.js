@@ -19,7 +19,9 @@
       frequentCrossfade: 9,
       drumIn: 7,
       drumOut: 9,
-      glacialCrossfade: 8
+      glacialCrossfade: 8,
+      rarityIn: 5,
+      rarityOut: 8
     },
 
     evolution: {
@@ -57,7 +59,21 @@
         frequent: { min: 30, max: 65 }
       }
     },
-
+ rarityLayer: {
+      name: "rareties",
+      folder: "rareties",
+      prefix: "rareties",
+      count: 30,
+      volume: 0.18,
+      chance: {
+        sporadic: 0.055,
+        frequent: 0.085
+      },
+      activeFor: {
+        sporadic: { min: 18, max: 55 },
+        frequent: { min: 14, max: 42 }
+      }
+    },
     temporaryLayers: {
       pad: {
         chance: { sporadic: 0.10, frequent: 0.16 },
@@ -98,7 +114,10 @@
   let compressor = null;
 
   const buffers = new Map();
+  const availableIndexes = new Map();
+  const failedFiles = [];
   const voices = new Map();
+  
   const temporaryVoices = new Map();
   const temporaryVoiceTimers = new Map();
   const glacialVoices = [];
@@ -215,67 +234,175 @@
     return [`${base}.ogg`, `${base}.mp3`];
   }
 
-  async function loadAudioBuffer(layer, index) {
-    const key = `${layer.name}:${index}`;
-    let lastError = null;
+async function loadAudioBuffer(layer, index) {
+  const key = `${layer.name}:${index}`;
+  let lastError = null;
 
-    for (const url of fileCandidates(layer, index)) {
-      try {
-        const response = await fetch(url, { cache: "force-cache" });
-        if (!response.ok) {
-          throw new Error(`${response.status} ${response.statusText}`);
-        }
+  for (const url of fileCandidates(layer, index)) {
+    try {
+      const response = await fetch(url, { cache: "no-cache" });
 
-        const arrayBuffer = await response.arrayBuffer();
-        const decoded = await audioContext.decodeAudioData(arrayBuffer);
-        buffers.set(key, decoded);
-        return;
-      } catch (error) {
-        lastError = error;
-        console.warn(`Could not load ${url}; trying fallback.`, error);
+      if (!response.ok) {
+        throw new Error(
+          `${response.status} ${response.statusText}`
+        );
       }
-    }
 
-    throw new Error(`Unable to load ${key}: ${lastError?.message || "unknown error"}`);
+      const arrayBuffer = await response.arrayBuffer();
+
+      if (arrayBuffer.byteLength === 0) {
+        throw new Error("Empty audio file");
+      }
+
+      const decoded =
+        await audioContext.decodeAudioData(
+          arrayBuffer.slice(0)
+        );
+
+      if (!decoded || decoded.duration <= 0) {
+        throw new Error(
+          "Audio decoded with no playable duration"
+        );
+      }
+
+      buffers.set(key, decoded);
+
+      if (!availableIndexes.has(layer.name)) {
+        availableIndexes.set(layer.name, []);
+      }
+
+      availableIndexes
+        .get(layer.name)
+        .push(index);
+
+      return {
+        ok: true,
+        key,
+        url
+      };
+    } catch (error) {
+      lastError = error;
+
+      console.warn(
+        `Could not load or decode ${url}.`,
+        error
+      );
+    }
   }
 
-  async function loadAllAudio() {
-    const jobs = [];
-    for (const layer of allSelectableLayers()) {
-      for (let i = 1; i <= layer.count; i += 1) {
-        jobs.push(loadAudioBuffer(layer, i));
-      }
+  failedFiles.push({
+    key,
+    error:
+      lastError?.message ||
+      "Unknown error"
+  });
+
+  return {
+    ok: false,
+    key
+  };
+}
+
+async function loadAllAudio() {
+  buffers.clear();
+  availableIndexes.clear();
+  failedFiles.length = 0;
+
+  const jobs = [];
+
+  const layersToLoad = [
+    ...CONFIG.normalLayers,
+    CONFIG.drumLayer,
+    CONFIG.rarityLayer
+  ];
+
+  for (const layer of layersToLoad) {
+    for (
+      let index = 1;
+      index <= layer.count;
+      index += 1
+    ) {
+      jobs.push(
+        loadAudioBuffer(layer, index)
+      );
     }
-    await Promise.all(jobs);
   }
 
-  function chooseIndex(layer, avoidIndex = null, additionalAvoidIndexes = []) {
-    let choices = [];
+  await Promise.allSettled(jobs);
 
-    for (let i = 1; i <= layer.count; i += 1) {
-      const isOldIndex = i === avoidIndex && layer.count > 1;
-      const isAdditionallyAvoided = additionalAvoidIndexes.includes(i);
-      if (!isOldIndex && !isAdditionallyAvoided) {
-        choices.push(i);
-      }
-    }
-
-    if (choices.length === 0) {
-      for (let i = 1; i <= layer.count; i += 1) {
-        if (i !== avoidIndex || layer.count === 1) {
-          choices.push(i);
-        }
-      }
-    }
-
-    return randomItem(choices);
+  for (
+    const indexes of
+    availableIndexes.values()
+  ) {
+    indexes.sort((a, b) => a - b);
   }
 
-  function createVoice(layer, index, initialGain = 0) {
-    const buffer = buffers.get(`${layer.name}:${index}`);
-    if (!buffer) {
-      throw new Error(`Missing buffer ${layer.name}:${index}`);
-    }
+  if (failedFiles.length > 0) {
+    console.group(
+      `${failedFiles.length} audio file(s) failed and will be skipped`
+    );
+
+    console.table(failedFiles);
+    console.groupEnd();
+  }
+
+  const playableCoreLayers =
+    CONFIG.normalLayers.filter(
+      layer =>
+        (
+          availableIndexes.get(
+            layer.name
+          ) || []
+        ).length > 0
+    );
+
+  if (playableCoreLayers.length === 0) {
+    throw new Error(
+      "No core atmosphere files could be loaded."
+    );
+  }
+}
+ function chooseIndex(layer, avoidIndex = null, additionalAvoidIndexes = []) {
+  const loaded = availableIndexes.get(layer.name) || [];
+
+  if (loaded.length === 0) {
+    return null;
+  }
+
+  let choices = loaded.filter(index => {
+    const isOldIndex = index === avoidIndex && loaded.length > 1;
+    const isAdditionallyAvoided =
+      additionalAvoidIndexes.includes(index);
+
+    return !isOldIndex && !isAdditionallyAvoided;
+  });
+
+  if (choices.length === 0) {
+    choices = loaded.filter(
+      index => index !== avoidIndex || loaded.length === 1
+    );
+  }
+
+  if (choices.length === 0) {
+    choices = [...loaded];
+  }
+
+  return randomItem(choices);
+}
+
+ function createVoice(layer, index, initialGain = 0) {
+  if (index === null || index === undefined) {
+    return null;
+  }
+
+  const buffer = buffers.get(`${layer.name}:${index}`);
+
+  if (!buffer) {
+    console.warn(
+      `Skipped missing buffer ${layer.name}:${index}`
+    );
+    return null;
+  }
 
     const source = audioContext.createBufferSource();
     const gain = audioContext.createGain();
