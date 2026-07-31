@@ -903,7 +903,7 @@
 
       rampGain(
         masterGain.gain,
-        0.72,
+        0.82,
         CONFIG.fade.masterIn
       );
 
