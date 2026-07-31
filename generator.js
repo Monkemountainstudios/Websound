@@ -2,13 +2,13 @@
   "use strict";
 
   /*
-    Silent Machine Generator — Version 2.0
+    Silent Machine Generator — Version 2.1
 
     Added:
-    - Normal and Glacial performance modes
-    - Four-slot, one-at-a-time Glacial evolution
-    - Playback-oriented AudioContext latency hint
-    - Ochre-yellow status LED with slow Glacial pulse
+    - Fault-tolerant audio loading: one bad file no longer stops the machine
+    - Only successfully decoded files are selected for playback
+    - Clear console report listing failed files
+    - 30 "rareties" files used as occasional rare events
   */
 
   const CONFIG = {
@@ -59,21 +59,20 @@
         frequent: { min: 30, max: 65 }
       }
     },
- rarityLayer: {
+
+    rarityLayer: {
       name: "rareties",
       folder: "rareties",
       prefix: "rareties",
       count: 30,
       volume: 0.18,
-      chance: {
-        sporadic: 0.055,
-        frequent: 0.085
-      },
+      chance: { sporadic: 0.055, frequent: 0.085 },
       activeFor: {
         sporadic: { min: 18, max: 55 },
         frequent: { min: 14, max: 42 }
       }
     },
+
     temporaryLayers: {
       pad: {
         chance: { sporadic: 0.10, frequent: 0.16 },
@@ -116,11 +115,14 @@
   const buffers = new Map();
   const availableIndexes = new Map();
   const failedFiles = [];
+
   const voices = new Map();
-  
   const temporaryVoices = new Map();
   const temporaryVoiceTimers = new Map();
   const glacialVoices = [];
+
+  let rarityVoice = null;
+  let rarityStopTimer = null;
 
   let evolutionMode = "sporadic";
   let performanceMode = "normal";
@@ -128,7 +130,6 @@
   let initialized = false;
   let initializing = false;
   let voicesStarted = false;
-
   let evolutionTimer = null;
   let drumStopTimer = null;
   let drumVoice = null;
@@ -137,8 +138,21 @@
   const randomBetween = (min, max) => min + Math.random() * (max - min);
   const randomItem = array => array[Math.floor(Math.random() * array.length)];
 
+  function allAudioLayers() {
+    return [
+      ...CONFIG.normalLayers,
+      CONFIG.drumLayer,
+      CONFIG.rarityLayer
+    ];
+  }
+
   function allSelectableLayers() {
-    return [...CONFIG.normalLayers, CONFIG.drumLayer];
+    return [...CONFIG.normalLayers, CONFIG.drumLayer]
+      .filter(layer => getAvailableIndexes(layer).length > 0);
+  }
+
+  function getAvailableIndexes(layer) {
+    return availableIndexes.get(layer.name) || [];
   }
 
   function setButtonPair(activeButton, inactiveButton) {
@@ -222,7 +236,9 @@
     for (let channel = 0; channel < 2; channel += 1) {
       const data = impulse.getChannelData(channel);
       for (let i = 0; i < length; i += 1) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        data[i] =
+          (Math.random() * 2 - 1) *
+          Math.pow(1 - i / length, decay);
       }
     }
 
@@ -234,189 +250,189 @@
     return [`${base}.ogg`, `${base}.mp3`];
   }
 
-async function loadAudioBuffer(layer, index) {
-  const key = `${layer.name}:${index}`;
-  let lastError = null;
+  async function loadAudioBuffer(layer, index) {
+    const key = `${layer.name}:${index}`;
+    const attempted = [];
+    let lastError = null;
 
-  for (const url of fileCandidates(layer, index)) {
-    try {
-      const response = await fetch(url, { cache: "no-cache" });
+    for (const url of fileCandidates(layer, index)) {
+      attempted.push(url);
 
-      if (!response.ok) {
-        throw new Error(
-          `${response.status} ${response.statusText}`
-        );
+      try {
+        const response = await fetch(url, { cache: "no-cache" });
+
+        if (!response.ok) {
+          throw new Error(`${response.status} ${response.statusText}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+
+        if (arrayBuffer.byteLength === 0) {
+          throw new Error("Empty audio file");
+        }
+
+        const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+
+        if (!decoded || decoded.duration <= 0) {
+          throw new Error("Audio decoded with no playable duration");
+        }
+
+        buffers.set(key, decoded);
+
+        if (!availableIndexes.has(layer.name)) {
+          availableIndexes.set(layer.name, []);
+        }
+        availableIndexes.get(layer.name).push(index);
+
+        return {
+          ok: true,
+          key,
+          url,
+          duration: decoded.duration
+        };
+      } catch (error) {
+        lastError = error;
+        console.warn(`Could not load or decode ${url}.`, error);
       }
+    }
 
-      const arrayBuffer = await response.arrayBuffer();
+    const failure = {
+      ok: false,
+      key,
+      attempted,
+      error: lastError?.message || "Unknown error"
+    };
 
-      if (arrayBuffer.byteLength === 0) {
-        throw new Error("Empty audio file");
+    failedFiles.push(failure);
+    return failure;
+  }
+
+  async function loadAllAudio() {
+    buffers.clear();
+    availableIndexes.clear();
+    failedFiles.length = 0;
+
+    const jobs = [];
+
+    for (const layer of allAudioLayers()) {
+      for (let index = 1; index <= layer.count; index += 1) {
+        jobs.push(loadAudioBuffer(layer, index));
       }
+    }
 
-      const decoded =
-        await audioContext.decodeAudioData(
-          arrayBuffer.slice(0)
-        );
+    const results = await Promise.allSettled(jobs);
 
-      if (!decoded || decoded.duration <= 0) {
-        throw new Error(
-          "Audio decoded with no playable duration"
-        );
-      }
+    for (const indexes of availableIndexes.values()) {
+      indexes.sort((a, b) => a - b);
+    }
 
-      buffers.set(key, decoded);
+    const loadedCount = results.filter(
+      result => result.status === "fulfilled" && result.value?.ok
+    ).length;
 
-      if (!availableIndexes.has(layer.name)) {
-        availableIndexes.set(layer.name, []);
-      }
+    console.info(
+      `Silent Machine: ${loadedCount} audio files loaded successfully.`
+    );
 
-      availableIndexes
-        .get(layer.name)
-        .push(index);
-
-      return {
-        ok: true,
-        key,
-        url
-      };
-    } catch (error) {
-      lastError = error;
-
-      console.warn(
-        `Could not load or decode ${url}.`,
-        error
+    if (failedFiles.length > 0) {
+      console.group(
+        `Silent Machine: ${failedFiles.length} file(s) failed and will be skipped`
       );
+      console.table(
+        failedFiles.map(item => ({
+          file: item.key,
+          attempted: item.attempted.join(" | "),
+          error: item.error
+        }))
+      );
+      console.groupEnd();
+    }
+
+    const usableCoreLayers = CONFIG.normalLayers.filter(
+      layer => getAvailableIndexes(layer).length > 0
+    );
+
+    if (usableCoreLayers.length === 0) {
+      throw new Error("No core atmosphere audio files could be decoded.");
+    }
+
+    if (performanceMode === "normal") {
+      const missingCoreLayers = CONFIG.normalLayers.filter(
+        layer => getAvailableIndexes(layer).length === 0
+      );
+
+      if (missingCoreLayers.length > 0) {
+        console.warn(
+          "These complete layers are unavailable and will be omitted:",
+          missingCoreLayers.map(layer => layer.name)
+        );
+      }
     }
   }
 
-  failedFiles.push({
-    key,
-    error:
-      lastError?.message ||
-      "Unknown error"
-  });
+  function chooseIndex(layer, avoidIndex = null, additionalAvoidIndexes = []) {
+    const loaded = getAvailableIndexes(layer);
 
-  return {
-    ok: false,
-    key
-  };
-}
+    if (loaded.length === 0) {
+      return null;
+    }
 
-async function loadAllAudio() {
-  buffers.clear();
-  availableIndexes.clear();
-  failedFiles.length = 0;
+    let choices = loaded.filter(index => {
+      const isOldIndex = index === avoidIndex && loaded.length > 1;
+      const isAdditionallyAvoided = additionalAvoidIndexes.includes(index);
+      return !isOldIndex && !isAdditionallyAvoided;
+    });
 
-  const jobs = [];
-
-  const layersToLoad = [
-    ...CONFIG.normalLayers,
-    CONFIG.drumLayer,
-    CONFIG.rarityLayer
-  ];
-
-  for (const layer of layersToLoad) {
-    for (
-      let index = 1;
-      index <= layer.count;
-      index += 1
-    ) {
-      jobs.push(
-        loadAudioBuffer(layer, index)
+    if (choices.length === 0) {
+      choices = loaded.filter(
+        index => index !== avoidIndex || loaded.length === 1
       );
     }
+
+    if (choices.length === 0) {
+      choices = [...loaded];
+    }
+
+    return randomItem(choices);
   }
 
-  await Promise.allSettled(jobs);
+  function createVoice(layer, index, initialGain = 0, loop = true) {
+    if (index === null || index === undefined) {
+      return null;
+    }
 
-  for (
-    const indexes of
-    availableIndexes.values()
-  ) {
-    indexes.sort((a, b) => a - b);
-  }
+    const buffer = buffers.get(`${layer.name}:${index}`);
 
-  if (failedFiles.length > 0) {
-    console.group(
-      `${failedFiles.length} audio file(s) failed and will be skipped`
-    );
-
-    console.table(failedFiles);
-    console.groupEnd();
-  }
-
-  const playableCoreLayers =
-    CONFIG.normalLayers.filter(
-      layer =>
-        (
-          availableIndexes.get(
-            layer.name
-          ) || []
-        ).length > 0
-    );
-
-  if (playableCoreLayers.length === 0) {
-    throw new Error(
-      "No core atmosphere files could be loaded."
-    );
-  }
-}
- function chooseIndex(layer, avoidIndex = null, additionalAvoidIndexes = []) {
-  const loaded = availableIndexes.get(layer.name) || [];
-
-  if (loaded.length === 0) {
-    return null;
-  }
-
-  let choices = loaded.filter(index => {
-    const isOldIndex = index === avoidIndex && loaded.length > 1;
-    const isAdditionallyAvoided =
-      additionalAvoidIndexes.includes(index);
-
-    return !isOldIndex && !isAdditionallyAvoided;
-  });
-
-  if (choices.length === 0) {
-    choices = loaded.filter(
-      index => index !== avoidIndex || loaded.length === 1
-    );
-  }
-
-  if (choices.length === 0) {
-    choices = [...loaded];
-  }
-
-  return randomItem(choices);
-}
-
- function createVoice(layer, index, initialGain = 0) {
-  if (index === null || index === undefined) {
-    return null;
-  }
-
-  const buffer = buffers.get(`${layer.name}:${index}`);
-
-  if (!buffer) {
-    console.warn(
-      `Skipped missing buffer ${layer.name}:${index}`
-    );
-    return null;
-  }
+    if (!buffer) {
+      console.warn(`Skipped missing buffer ${layer.name}:${index}`);
+      return null;
+    }
 
     const source = audioContext.createBufferSource();
     const gain = audioContext.createGain();
+
     source.buffer = buffer;
-    source.loop = true;
+    source.loop = loop;
     gain.gain.value = initialGain;
+
     source.connect(gain);
     gain.connect(dryGain);
     gain.connect(convolver);
 
-    const randomStart = Math.random() * Math.max(0.001, buffer.duration);
+    const randomStart = loop
+      ? Math.random() * Math.max(0.001, buffer.duration)
+      : 0;
+
     source.start(0, randomStart);
 
-    return { layer, index, source, gain, stopped: false };
+    return {
+      layer,
+      index,
+      source,
+      gain,
+      stopped: false,
+      duration: buffer.duration
+    };
   }
 
   function rampGain(param, target, seconds) {
@@ -442,6 +458,7 @@ async function loadAllAudio() {
   function stopVoiceNow(voice) {
     if (!voice || voice.stopped) return;
     voice.stopped = true;
+
     try { voice.source.stop(); } catch (_) {}
     try {
       voice.source.disconnect();
@@ -461,18 +478,38 @@ async function loadAllAudio() {
 
   function beginNormalVoices() {
     for (const layer of CONFIG.normalLayers) {
-      const voice = createVoice(layer, chooseIndex(layer), layer.volume);
-      voices.set(layer.name, voice);
+      if (getAvailableIndexes(layer).length === 0) continue;
+
+      const voice = createVoice(
+        layer,
+        chooseIndex(layer),
+        layer.volume
+      );
+
+      if (voice) {
+        voices.set(layer.name, voice);
+      }
     }
   }
 
   function beginGlacialVoices() {
     const selectable = allSelectableLayers();
 
+    if (selectable.length === 0) {
+      throw new Error("No playable layers are available.");
+    }
+
     for (let slot = 0; slot < CONFIG.glacial.slots; slot += 1) {
       const layer = randomItem(selectable);
-      const voice = createVoice(layer, chooseIndex(layer), layer.volume);
-      glacialVoices.push(voice);
+      const voice = createVoice(
+        layer,
+        chooseIndex(layer),
+        layer.volume
+      );
+
+      if (voice) {
+        glacialVoices.push(voice);
+      }
     }
   }
 
@@ -489,13 +526,23 @@ async function loadAllAudio() {
   }
 
   function replaceNormalLayer(layer) {
-    if (!atmosphereOn) return;
+    if (!atmosphereOn || getAvailableIndexes(layer).length === 0) return;
 
     const oldVoice = voices.get(layer.name);
     const temporaryVoice = temporaryVoices.get(layer.name);
-    const additionalAvoidIndexes = temporaryVoice ? [temporaryVoice.index] : [];
-    const newIndex = chooseIndex(layer, oldVoice?.index, additionalAvoidIndexes);
+    const additionalAvoidIndexes = temporaryVoice
+      ? [temporaryVoice.index]
+      : [];
+
+    const newIndex = chooseIndex(
+      layer,
+      oldVoice?.index,
+      additionalAvoidIndexes
+    );
+
     const newVoice = createVoice(layer, newIndex, 0);
+    if (!newVoice) return;
+
     const fade = getCurrentCrossfade();
 
     voices.set(layer.name, newVoice);
@@ -510,17 +557,35 @@ async function loadAllAudio() {
   function evolveGlacialSlot() {
     if (!atmosphereOn || glacialVoices.length === 0) return;
 
+    const selectable = allSelectableLayers();
+    if (selectable.length === 0) return;
+
     const slotIndex = Math.floor(Math.random() * glacialVoices.length);
     const oldVoice = glacialVoices[slotIndex];
-    const newLayer = randomItem(allSelectableLayers());
-    const avoidIndex = oldVoice?.layer.name === newLayer.name ? oldVoice.index : null;
-    const newVoice = createVoice(newLayer, chooseIndex(newLayer, avoidIndex), 0);
-    const fade = CONFIG.fade.glacialCrossfade;
+    const newLayer = randomItem(selectable);
 
+    const avoidIndex =
+      oldVoice?.layer.name === newLayer.name
+        ? oldVoice.index
+        : null;
+
+    const newVoice = createVoice(
+      newLayer,
+      chooseIndex(newLayer, avoidIndex),
+      0
+    );
+
+    if (!newVoice) return;
+
+    const fade = CONFIG.fade.glacialCrossfade;
     glacialVoices[slotIndex] = newVoice;
+
     rampGain(newVoice.gain.gain, newLayer.volume, fade);
-    rampGain(oldVoice.gain.gain, 0, fade);
-    stopVoiceAfter(oldVoice, fade);
+
+    if (oldVoice) {
+      rampGain(oldVoice.gain.gain, 0, fade);
+      stopVoiceAfter(oldVoice, fade);
+    }
   }
 
   function maybeStartTemporaryVoice(layerName) {
@@ -530,26 +595,40 @@ async function loadAllAudio() {
     if (!settings || temporaryVoices.has(layerName)) return;
     if (Math.random() > settings.chance[evolutionMode]) return;
 
-    const layer = CONFIG.normalLayers.find(item => item.name === layerName);
-    if (!layer) return;
+    const layer = CONFIG.normalLayers.find(
+      item => item.name === layerName
+    );
+
+    if (!layer || getAvailableIndexes(layer).length === 0) return;
 
     const mainVoice = voices.get(layerName);
-    const companionVoice = createVoice(layer, chooseIndex(layer, mainVoice?.index), 0);
+
+    const companionVoice = createVoice(
+      layer,
+      chooseIndex(layer, mainVoice?.index),
+      0
+    );
+
+    if (!companionVoice) return;
+
     temporaryVoices.set(layerName, companionVoice);
 
     const fade = getCurrentCrossfade();
     rampGain(companionVoice.gain.gain, settings.volume, fade);
 
     const activeRange = settings.activeFor[evolutionMode];
+
     const timer = window.setTimeout(
       () => stopTemporaryVoice(layerName),
       randomBetween(activeRange.min, activeRange.max) * 1000
     );
+
     temporaryVoiceTimers.set(layerName, timer);
   }
 
   function stopTemporaryVoice(layerName) {
     const timer = temporaryVoiceTimers.get(layerName);
+
     if (timer) {
       clearTimeout(timer);
       temporaryVoiceTimers.delete(layerName);
@@ -559,6 +638,7 @@ async function loadAllAudio() {
     if (!voice) return;
 
     temporaryVoices.delete(layerName);
+
     const fade = getCurrentCrossfade();
     rampGain(voice.gain.gain, 0, fade);
     stopVoiceAfter(voice, fade);
@@ -568,21 +648,39 @@ async function loadAllAudio() {
     for (const layerName of Array.from(temporaryVoices.keys())) {
       stopTemporaryVoice(layerName);
     }
+
     for (const timer of temporaryVoiceTimers.values()) {
       clearTimeout(timer);
     }
+
     temporaryVoiceTimers.clear();
   }
 
   function maybeStartDrums() {
-    if (!atmosphereOn || performanceMode !== "normal" || drumVoice) return;
-    if (Math.random() > CONFIG.drumLayer.chance[evolutionMode]) return;
-
     const layer = CONFIG.drumLayer;
+
+    if (
+      !atmosphereOn ||
+      performanceMode !== "normal" ||
+      drumVoice ||
+      getAvailableIndexes(layer).length === 0
+    ) {
+      return;
+    }
+
+    if (Math.random() > layer.chance[evolutionMode]) return;
+
     drumVoice = createVoice(layer, chooseIndex(layer), 0);
-    rampGain(drumVoice.gain.gain, layer.volume, CONFIG.fade.drumIn);
+    if (!drumVoice) return;
+
+    rampGain(
+      drumVoice.gain.gain,
+      layer.volume,
+      CONFIG.fade.drumIn
+    );
 
     const activeRange = layer.activeFor[evolutionMode];
+
     clearTimeout(drumStopTimer);
     drumStopTimer = window.setTimeout(
       stopDrums,
@@ -593,33 +691,133 @@ async function loadAllAudio() {
   function stopDrums() {
     clearTimeout(drumStopTimer);
     drumStopTimer = null;
+
     if (!drumVoice) return;
 
     const oldVoice = drumVoice;
     drumVoice = null;
+
     rampGain(oldVoice.gain.gain, 0, CONFIG.fade.drumOut);
     stopVoiceAfter(oldVoice, CONFIG.fade.drumOut);
+  }
+
+  function maybeStartRarity() {
+    const layer = CONFIG.rarityLayer;
+
+    if (
+      !atmosphereOn ||
+      performanceMode !== "normal" ||
+      rarityVoice ||
+      getAvailableIndexes(layer).length === 0
+    ) {
+      return;
+    }
+
+    if (Math.random() > layer.chance[evolutionMode]) return;
+
+    rarityVoice = createVoice(
+      layer,
+      chooseIndex(layer),
+      0,
+      false
+    );
+
+    if (!rarityVoice) return;
+
+    rampGain(
+      rarityVoice.gain.gain,
+      layer.volume,
+      CONFIG.fade.rarityIn
+    );
+
+    const activeRange = layer.activeFor[evolutionMode];
+    const desiredDuration = randomBetween(
+      activeRange.min,
+      activeRange.max
+    );
+
+    /*
+      A rarity is played once. It fades out before either its configured
+      maximum presence or the end of the actual file, whichever comes first.
+    */
+    const usableDuration = Math.max(
+      CONFIG.fade.rarityIn + 1,
+      Math.min(desiredDuration, rarityVoice.duration)
+    );
+
+    const fadeStartDelay = Math.max(
+      1,
+      usableDuration - CONFIG.fade.rarityOut
+    );
+
+    clearTimeout(rarityStopTimer);
+
+    rarityStopTimer = window.setTimeout(() => {
+      if (!rarityVoice) return;
+
+      const oldVoice = rarityVoice;
+      rarityVoice = null;
+
+      rampGain(
+        oldVoice.gain.gain,
+        0,
+        Math.min(CONFIG.fade.rarityOut, usableDuration / 2)
+      );
+
+      stopVoiceAfter(
+        oldVoice,
+        Math.min(CONFIG.fade.rarityOut, usableDuration / 2)
+      );
+    }, fadeStartDelay * 1000);
+  }
+
+  function stopRarity() {
+    clearTimeout(rarityStopTimer);
+    rarityStopTimer = null;
+
+    if (!rarityVoice) return;
+
+    const oldVoice = rarityVoice;
+    rarityVoice = null;
+
+    rampGain(oldVoice.gain.gain, 0, CONFIG.fade.rarityOut);
+    stopVoiceAfter(oldVoice, CONFIG.fade.rarityOut);
   }
 
   function stopAllVoicesImmediately() {
     clearTimeout(evolutionTimer);
     evolutionTimer = null;
+
     clearTimeout(drumStopTimer);
     drumStopTimer = null;
 
-    for (const timer of temporaryVoiceTimers.values()) clearTimeout(timer);
+    clearTimeout(rarityStopTimer);
+    rarityStopTimer = null;
+
+    for (const timer of temporaryVoiceTimers.values()) {
+      clearTimeout(timer);
+    }
     temporaryVoiceTimers.clear();
 
-    for (const voice of voices.values()) stopVoiceNow(voice);
+    for (const voice of voices.values()) {
+      stopVoiceNow(voice);
+    }
     voices.clear();
 
-    for (const voice of temporaryVoices.values()) stopVoiceNow(voice);
+    for (const voice of temporaryVoices.values()) {
+      stopVoiceNow(voice);
+    }
     temporaryVoices.clear();
 
     if (drumVoice) stopVoiceNow(drumVoice);
     drumVoice = null;
 
-    for (const voice of glacialVoices) stopVoiceNow(voice);
+    if (rarityVoice) stopVoiceNow(rarityVoice);
+    rarityVoice = null;
+
+    for (const voice of glacialVoices) {
+      stopVoiceNow(voice);
+    }
     glacialVoices.length = 0;
 
     voicesStarted = false;
@@ -627,9 +825,12 @@ async function loadAllAudio() {
 
   function scheduleNextEvolution() {
     clearTimeout(evolutionTimer);
+
     if (!atmosphereOn) return;
 
-    const range = CONFIG.evolution[performanceMode][evolutionMode];
+    const range =
+      CONFIG.evolution[performanceMode][evolutionMode];
+
     const delaySeconds = randomBetween(range.min, range.max);
 
     evolutionTimer = window.setTimeout(() => {
@@ -638,10 +839,18 @@ async function loadAllAudio() {
       if (performanceMode === "glacial") {
         evolveGlacialSlot();
       } else {
-        replaceNormalLayer(randomItem(CONFIG.normalLayers));
+        const usableNormalLayers = CONFIG.normalLayers.filter(
+          layer => getAvailableIndexes(layer).length > 0
+        );
+
+        if (usableNormalLayers.length > 0) {
+          replaceNormalLayer(randomItem(usableNormalLayers));
+        }
+
         maybeStartDrums();
         maybeStartTemporaryVoice("pad");
         maybeStartTemporaryVoice("melody");
+        maybeStartRarity();
       }
 
       scheduleNextEvolution();
@@ -661,7 +870,11 @@ async function loadAllAudio() {
       initialized = true;
     } catch (error) {
       console.error(error);
-      alert("The atmosphere could not start. Check the audio folders and filenames, then reload.");
+
+      alert(
+        "The atmosphere could not start because no usable audio could be loaded. Open the browser console for details, then reload."
+      );
+
       throw error;
     } finally {
       initializing = false;
@@ -672,6 +885,7 @@ async function loadAllAudio() {
 
   async function turnOn() {
     if (atmosphereOn || initializing) return;
+
     const token = ++operationToken;
 
     try {
@@ -682,10 +896,17 @@ async function loadAllAudio() {
       if (token !== operationToken) return;
 
       beginCurrentModeVoices();
+
       atmosphereOn = true;
       setButtonPair(ui.on, ui.off);
       refreshLed();
-      rampGain(masterGain.gain, 0.72, CONFIG.fade.masterIn);
+
+      rampGain(
+        masterGain.gain,
+        0.72,
+        CONFIG.fade.masterIn
+      );
+
       scheduleNextEvolution();
     } catch (_) {
       setButtonPair(ui.off, ui.on);
@@ -704,18 +925,32 @@ async function loadAllAudio() {
 
     atmosphereOn = false;
     refreshLed();
+
     clearTimeout(evolutionTimer);
     evolutionTimer = null;
+
     stopDrums();
+    stopRarity();
     stopAllTemporaryVoices();
-    rampGain(masterGain.gain, 0, CONFIG.fade.masterOut);
+
+    rampGain(
+      masterGain.gain,
+      0,
+      CONFIG.fade.masterOut
+    );
 
     const context = audioContext;
+
     window.setTimeout(async () => {
       if (!atmosphereOn) {
         stopAllVoicesImmediately();
+
         if (context.state === "running") {
-          try { await context.suspend(); } catch (error) { console.warn(error); }
+          try {
+            await context.suspend();
+          } catch (error) {
+            console.warn(error);
+          }
         }
       }
     }, CONFIG.fade.masterOut * 1000 + 150);
@@ -723,18 +958,23 @@ async function loadAllAudio() {
 
   function setEvolution(mode) {
     evolutionMode = mode;
+
     if (mode === "sporadic") {
       setButtonPair(ui.sporadic, ui.frequent);
     } else {
       setButtonPair(ui.frequent, ui.sporadic);
     }
-    if (atmosphereOn) scheduleNextEvolution();
+
+    if (atmosphereOn) {
+      scheduleNextEvolution();
+    }
   }
 
   function setPerformance(mode) {
     if (performanceMode === mode) return;
 
     performanceMode = mode;
+
     if (mode === "glacial") {
       setButtonPair(ui.glacial, ui.normal);
     } else {
@@ -747,8 +987,10 @@ async function loadAllAudio() {
     if (!initialized) return;
 
     const wasOn = atmosphereOn;
+
     clearTimeout(evolutionTimer);
     evolutionTimer = null;
+
     stopAllVoicesImmediately();
 
     if (wasOn) {
@@ -759,10 +1001,22 @@ async function loadAllAudio() {
 
   ui.on.addEventListener("click", turnOn);
   ui.off.addEventListener("click", turnOff);
-  ui.sporadic.addEventListener("click", () => setEvolution("sporadic"));
-  ui.frequent.addEventListener("click", () => setEvolution("frequent"));
-  ui.normal.addEventListener("click", () => setPerformance("normal"));
-  ui.glacial.addEventListener("click", () => setPerformance("glacial"));
+  ui.sporadic.addEventListener(
+    "click",
+    () => setEvolution("sporadic")
+  );
+  ui.frequent.addEventListener(
+    "click",
+    () => setEvolution("frequent")
+  );
+  ui.normal.addEventListener(
+    "click",
+    () => setPerformance("normal")
+  );
+  ui.glacial.addEventListener(
+    "click",
+    () => setPerformance("glacial")
+  );
 
   updateModeText();
   refreshLed();
