@@ -64,7 +64,7 @@
       name: "rareties",
       folder: "rareties",
       prefix: "rareties",
-      count: 30,
+      count: 31,
       volume: 0.18,
       chance: { sporadic: 0.055, frequent: 0.085 },
       activeFor: {
